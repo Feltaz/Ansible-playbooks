@@ -1,0 +1,6 @@
+#Variables applicable to all hosts
+
+ansible_become_pass: 123456
+remote_install_path: /opt/snort/
+remote_install_path_daq: /opt/snort/daq-2.0.7.tar.gz
+remote_install_path_snort: /opt/snort/snort-2.9.20.tar.gz

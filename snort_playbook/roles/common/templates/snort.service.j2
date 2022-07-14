@@ -1,0 +1,10 @@
+[Unit]
+Description=Snort HOST IPS Daemon
+After=syslog.target network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/sbin/snort -Q --daq-var device={{ ansible_default_ipv4.interface }} -c /etc/snort/snort.conf -l /var/log/snort -A fast -u snort -g snort
+
+[Install]
+WantedBy=multi-user.target

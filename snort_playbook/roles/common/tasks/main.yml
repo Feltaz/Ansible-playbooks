@@ -1,0 +1,194 @@
+#using variables for src and dest is probably a good thing
+- name: push daq  source files
+  become: yes
+  copy: src=daq-2.0.7.tar.gz dest={{ remote_install_path }}
+  register: daq_source
+ 
+- name: push snort source files
+  become: yes
+  copy: src=snort-2.9.20.tar.gz dest={{ remote_install_path }}
+  register: snort_source
+
+#installing dependencies
+- name: installing dependencies
+  become: yes
+  ansible.builtin.apt:
+    name: "{{ item }}" 
+    state: present
+    update_cache: yes
+  with_items:
+    - build-essential
+    - bison
+    - flex
+    - libpcap-dev
+    - libdnet-dev
+    - libdumbnet-dev
+    - libntirpc-dev
+    - libpcre3-dev
+    - libluajit-5.1-dev
+    - libssl-dev
+    - luajit
+    - zlib1g-dev
+    - liblzma-dev
+    - openssl
+    - libnghttp2-dev
+    - libnetfilter-queue-dev
+    - iptables-persistent
+#unpacking daq
+- name: unpacking daq
+  become: yes
+  ansible.builtin.unarchive:
+    copy: no
+    dest: /opt/
+    src: "{{ remote_install_path_daq }}"
+  when: daq_source is succeeded
+  register: daq_source_unpacked
+  
+#Configuring daq
+- name: configuring daq
+  become: yes
+  ansible.builtin.command: "./configure"
+  args:
+    chdir: /opt/daq-2.0.7
+  when: daq_source_unpacked is succeeded
+  register: daq_configure
+
+#Installing daq
+- name: Installing daq
+  become: yes
+  ansible.builtin.shell: make && make install
+  args:
+    chdir: /opt/daq-2.0.7 
+  when: daq_configure is succeeded
+  register: daq_installed
+
+#unpacking snort
+- name: unpacking snort 
+  become: yes
+  ansible.builtin.unarchive:
+    copy: no
+    dest: /opt/
+    src: "{{ remote_install_path_snort }}"
+  when: snort_source is succeeded
+  register: snort_source_unpacked
+
+#configuring snort
+- name: Configuring snort
+  become: yes
+  ansible.builtin.command: "./configure --enable-sourcefire"
+  args:
+    chdir: /opt/snort-2.9.20  
+  when: snort_source_unpacked is succeeded
+  register: snort_configured
+
+#copying ntirpc files to include
+
+- name: Copying ntirpc files
+  become: yes
+  ansible.builtin.shell: "cp -r /usr/include/ntirpc/* /usr/include/" 
+  register: ntirpc_included
+
+#installing snort
+- name: Installing snort
+  become: yes
+  ansible.builtin.shell: make && make install
+  args:
+    chdir: /opt/snort-2.9.20
+  when: (snort_configured is succeeded) and (ntirpc_included is succeeded)
+  register: snort_installed
+
+#configure  dynamic linker
+- name: running ldconfig
+  become: yes
+  ansible.builtin.shell: "ldconfig"
+  when: snort_installed is succeeded
+
+#create symlink to use for a systemd unit later on
+- name: Creating Symlink
+  become: yes
+  ansible.builtin.file:
+    src: "/usr/local/bin/snort"
+    dest: "/usr/sbin/snort"
+    state: link
+#create snort user and group
+
+- name: creating snort group
+  become: yes 
+  group:
+    name: snort
+  register: snort_group_created
+
+- name: creating snort user 
+  become: yes
+  user:
+    name: snort
+    system: yes
+    shell: /sbin/nologin
+    create_home: no
+    comment: SNORT IPS
+    group: snort
+  when: snort_group_created is succeeded
+  register: snort_user_created
+
+#configure and create  all necessary files 
+- name: creating etc directory with nfq configured in queue 0
+  become: yes
+  ansible.builtin.copy:
+    src: snort/
+    dest: /etc/snort/
+  register: etc_created
+  when: snort_installed is succeeded
+
+- name: creating log and dynamic rules directory 
+  become: yes
+  ansible.builtin.file:
+    path:  "{{ item }}"
+    state: directory
+    owner: snort
+    group: snort
+    recurse: yes
+    mode:  5755
+  with_items:
+    - /usr/local/lib/snort_dynamicrules/
+    - /var/log/snort/
+    - /etc/snort/
+
+- name: copying dynamic rules from source dir
+  become: yes
+  ansible.builtin.copy:
+    remote_src: yes
+    src: /opt/snort-2.9.20/src/dynamic-preprocessors/build/usr/local/lib/snort_dynamicpreprocessor/
+    dest: /usr/local/lib/snort_dynamicpreprocessor/
+  register: dynamic_preproc_copied
+  when: snort_installed is succeeded
+
+#Setting up snort as a systemd service unit
+
+- name: Copying snort service unit file
+  become: yes
+  ansible.builtin.template:
+    src: snort.service.j2
+    dest: /lib/systemd/system/snort.service
+  when: snort_installed is succeeded
+  register: snort_unit_created
+
+#Reloading systemd and enabling snort to start on startup
+
+- name: Restarting Systemd daemon and enabling snort
+  become: yes
+  ansible.builtin.systemd:
+    daemon_reload: yes
+    enabled: yes
+    name: snort.service
+    state: started
+  register: snort_service_started
+
+#Configuring Iptables
+
+- name: iptables input   and output rule
+  become: yes
+  ansible.builtin.shell: "iptables -F && iptables -A OUTPUT -j NFQUEUE --queue-num 0 --queue-bypass && iptables -A INPUT -j NFQUEUE --queue-num 0 --queue-bypass"
+  when: snort_service_started is succeeded
+  notify: save iptables
+
+

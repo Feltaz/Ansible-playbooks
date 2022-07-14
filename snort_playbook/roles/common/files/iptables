@@ -1,0 +1,11 @@
+#this is the iptables file needed to make rules persistant
+
+
+
+
+
+
+-A INPUT -j NFQUEUE --queue-num 0 --queue-bypass
+
+
+-A OUTPUT -j NFQUEUE --queue-num 0 --queue-bypass

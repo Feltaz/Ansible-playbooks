@@ -1,0 +1,7 @@
+#THIS FILE IS FOR LOCALA RULES REMEMBER THAT USER DEFINED RULES SHOULD HAVE AN SID GREATER THAN 1000000
+
+
+
+
+
+alert icmp any any -> any any (msg:"this is a test";sid:1000001;rev:1;)
