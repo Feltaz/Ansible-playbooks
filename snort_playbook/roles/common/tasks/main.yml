@@ -166,11 +166,21 @@
 
 - name: Copying snort service unit file
   become: yes
-  ansible.builtin.template:
-    src: snort.service.j2
+  ansible.builtin.copy:
+    src: snort.service
     dest: /lib/systemd/system/snort.service
   when: snort_installed is succeeded
   register: snort_unit_created
+
+#Setting up snort config file 
+
+- name: setting up snort config file
+  become: yes
+  ansible.builtin.template:
+   src: snort.conf.j2
+   dest: /etc/snort/snort.conf
+  when: snort_installed is succeeded
+  register: snort_config_created
 
 #Reloading systemd and enabling snort to start on startup
 

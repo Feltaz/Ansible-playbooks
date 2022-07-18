@@ -157,6 +157,7 @@ config checksum_mode: all
  config daq_mode: inline
  config policy_mode : inline
  config daq_var: queue=0
+ config daq_var: device={{ ansible_default_ipv4.interface }}
 # config daq_dir: <dir>
 # config daq_mode: <mode>
 # config daq_var: <var>
