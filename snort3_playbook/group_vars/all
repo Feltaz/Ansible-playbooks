@@ -1,0 +1,5 @@
+#Variables applicable to all hosts
+
+remote_install_path: /opt/snort/
+remote_install_path_daq: /opt/snort/libdaq.v3.0.9.tar.gz
+remote_install_path_snort: /opt/snort/snort.3.1.36.0.tar.gz

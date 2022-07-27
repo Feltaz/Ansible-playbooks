@@ -1,0 +1,108 @@
+#using variables for src and dest is probably a good thing
+- name: push daq  source files
+  become: yes
+  copy: src=libdaq.v3.0.9.tar.gz dest={{ remote_install_path }}
+  register: daq_source
+ 
+- name: push snort source files
+  become: yes
+  copy: src=snort.3.1.36.0.tar.gz dest={{ remote_install_path }}
+  register: snort_source
+
+#installing dependencies
+- name: installing dependencies
+  become: yes
+  ansible.builtin.apt:
+    name: "{{ item }}" 
+    state: present
+    update_cache: yes
+  with_items:
+    - build-essential
+    - dh-autoreconf
+    - pkg-config
+    - libmnl-dev
+    - cmake
+    - bison
+    - flex
+    - libpcap-dev
+    - libdnet-dev
+    - libdumbnet-dev
+    - libhwloc-dev
+    - libpcre3-dev
+    - libluajit-5.1-dev
+    - libssl-dev
+    - zlib1g-dev
+    - liblzma-dev
+    - openssl
+    - libnetfilter-queue-dev
+    - iptables-persistent
+#unpacking daq
+- name: unpacking daq
+  become: yes
+  ansible.builtin.unarchive:
+    copy: no
+    dest: /opt/
+    src: "{{ remote_install_path_daq }}"
+  when: daq_source is succeeded
+  register: daq_source_unpacked
+  
+#Configuring daq
+- name: configuring daq
+  become: yes
+  ansible.builtin.shell: ./bootstrap && ./configure 
+  args:
+    chdir: /opt/libdaq-3.0.9
+  when: daq_source_unpacked is succeeded
+  register: daq_configure
+
+#Installing daq
+- name: Installing daq
+  become: yes
+  ansible.builtin.shell: make && make install
+  args:
+    chdir: /opt/libdaq-3.0.9
+  when: daq_configure is succeeded
+  register: daq_installed
+
+#unpacking snort
+- name: unpacking snort 
+  become: yes
+  ansible.builtin.unarchive:
+    copy: no
+    dest: /opt/
+    src: "{{ remote_install_path_snort }}"
+  when: snort_source is succeeded
+  register: snort_source_unpacked
+
+#configuring snort
+- name: Configuring snort
+  become: yes
+  ansible.builtin.command: "./configure_cmake.sh"
+  args:
+    chdir: /opt/snort3-3.1.36.0
+  when: snort_source_unpacked is succeeded
+  register: snort_configured
+
+
+#installing snort
+- name: Installing snort
+  become: yes
+  ansible.builtin.shell: make && make install
+  args:
+    chdir: /opt/snort3-3.1.36.0/build
+  when: snort_configured is succeeded 
+  register: snort_installed
+
+- name: Configure Dynamic Linker
+  become: yes
+  ansible.builtin.command: "ldconfig"
+  when: snort_installed is succeeded
+
+#create symlink to use for a systemd unit later on
+- name: Creating Symlink
+  become: yes
+  ansible.builtin.file:
+    src: "/usr/local/snort/bin/snort"
+    dest: "/usr/sbin/snort"
+    state: link
+
