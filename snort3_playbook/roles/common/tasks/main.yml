@@ -166,7 +166,7 @@
   ansible.builtin.systemd:
     daemon_reload: yes
     enabled: yes
-    name: snort.service
+    name: snort3.service
     state: started
   register: snort_service_started
   
