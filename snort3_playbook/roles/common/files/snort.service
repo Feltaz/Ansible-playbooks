@@ -1,0 +1,10 @@
+[Unit]
+Description=Snort HOST IPS Daemon
+After=syslog.target network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/sbin/snort -Q -c /usr/local/snort/etc/snort/snort.lua -l /var/log/snort/ -A full -u snort -g snort
+
+[Install]
+WantedBy=multi-user.target

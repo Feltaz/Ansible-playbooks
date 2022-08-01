@@ -105,4 +105,76 @@
     src: "/usr/local/snort/bin/snort"
     dest: "/usr/sbin/snort"
     state: link
+    
+#Copying template config file
+
+
+- name: Copying template of config file
+  become: yes
+  ansible.builtin.template: 
+    src: "snort.lua.j2"
+    dest: "/usr/local/snort/etc/snort/snort.lua"
+  when: snort_installed is succeeded
+  register: snort_lua_created
+#create snort user and group
+
+- name: creating snort group
+  become: yes 
+  group:
+    name: snort
+  register: snort_group_created
+
+- name: creating snort user 
+  become: yes
+  user:
+    name: snort
+    system: yes
+    shell: /sbin/nologin
+    create_home: no
+    comment: SNORT IPS
+    group: snort
+  when: snort_group_created is succeeded
+  register: snort_user_created
+
+#Create Log directory
+
+- name: creating log directory 
+  become: yes
+  ansible.builtin.file:
+    path:  /var/log/snort/
+    state: directory
+    owner: snort
+    group: snort
+    recurse: yes
+    mode:  5755
+  when: (snort_group_created is succeeded) and (snort_user_created is succeeded)
+
+#Setting systemd unit
+
+- name: Copying snort service unit file
+  become: yes
+  ansible.builtin.copy:
+    src: snort3.service
+    dest: /lib/systemd/system/snort3.service
+  when: snort_installed is succeeded
+  register: snort_unit_created
+
+#Daemon reload
+
+- name: Restarting Systemd daemon and enabling snort
+  become: yes
+  ansible.builtin.systemd:
+    daemon_reload: yes
+    enabled: yes
+    name: snort.service
+    state: started
+  register: snort_service_started
+  
+#Configuring Iptables
+
+- name: iptables input   and output rule
+  become: yes
+  ansible.builtin.shell: "iptables -F && iptables -A OUTPUT -j NFQUEUE --queue-num 0 --queue-bypass && iptables -A INPUT -j NFQUEUE --queue-num 0 --queue-bypass"
+  when: snort_service_started is succeeded
+  notify: save iptables
 
