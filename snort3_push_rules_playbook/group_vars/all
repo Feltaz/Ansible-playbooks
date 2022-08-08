@@ -1,0 +1,2 @@
+SNORT_PATH: /usr/local/snort
+SNORT_RULE_PATH: /opt
